@@ -70,11 +70,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"os"
-	"reflect"
 	"sync"
-	"syscall"
 	"time"
-	"unsafe"
 )
 
 type Mode uint8
@@ -673,39 +670,6 @@ func Open() (err error) {
 
 	backupIRQs() // back up enabled IRQs, to restore it later
 
-	return nil
-}
-
-func memMap(fd uintptr, base int64) (mem []uint32, mem8 []byte, err error) {
-	mem8, err = syscall.Mmap(
-		int(fd),
-		base,
-		memLength,
-		syscall.PROT_READ|syscall.PROT_WRITE,
-		syscall.MAP_SHARED,
-	)
-	if err != nil {
-		return
-	}
-	// Convert mapped byte memory to unsafe []uint32 pointer, adjust length as needed
-	header := *(*reflect.SliceHeader)(unsafe.Pointer(&mem8))
-	header.Len /= (32 / 8) // (32 bit = 4 bytes)
-	header.Cap /= (32 / 8)
-	mem = *(*[]uint32)(unsafe.Pointer(&header))
-	return
-}
-
-// Close unmaps GPIO memory
-func Close() error {
-	EnableIRQs(irqsBackup) // Return IRQs to state where it was before - just to be nice
-
-	memlock.Lock()
-	defer memlock.Unlock()
-	for _, mem8 := range [][]uint8{gpioMem8, clkMem8, pwmMem8, spiMem8, intrMem8} {
-		if err := syscall.Munmap(mem8); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
